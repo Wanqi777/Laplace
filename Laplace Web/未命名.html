@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laplace's Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#050505',
+                        accent: '#ff2d2d',
+                        light: '#f5f5f5',
+                    },
+                    fontFamily: {
+                        mono: ['Courier New', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .pulse-slow {
+                animation: pulseSlow 4s infinite ease-in-out;
+            }
+            .pulse-fast {
+                animation: pulseFast 2s infinite ease-in-out;
+            }
+            .glow {
+                filter: drop-shadow(0 0 3px rgba(255, 45, 45, 0.8));
+            }
+            .fade-in {
+                animation: fadeIn 1.5s forwards;
+                opacity: 0;
+            }
+            .slide-up {
+                animation: slideUp 1s forwards;
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            .eye-scan {
+                animation: eyeScan 3s forwards;
+                stroke-dasharray: 200;
+                stroke-dashoffset: 200;
+            }
+            .collapse {
+                animation: collapse 4s forwards;
+            }
+            .rebuild {
+                animation: rebuild 6s forwards;
+                opacity: 0;
+            }
+            .clue-hover {
+                transition: all 0.3s;
+                opacity: 0.2; /* 默认显示一点透明度 */
+                background-color: rgba(5, 5, 5, 0.7); /* 增加背景色 */
+                padding: 8px 12px; /* 增加内边距 */
+                border-radius: 4px; /* 圆角边框 */
+                transform: scale(0.95); /* 稍微缩小 */
+            }
+            .clue-hover:hover {
+                opacity: 1; /* 悬停时完全显示 */
+                transform: scale(1.1); /* 悬停时放大 */
+                box-shadow: 0 0 10px rgba(255, 45, 45, 0.5); /* 添加发光效果 */
+            }
+            .draggable {
+                cursor: grab;
+                transition: transform 0.2s;
+            }
+            .draggable:active {
+                cursor: grabbing;
+                transform: scale(0.95);
+            }
+            .drop-zone {
+                border: 2px dashed rgba(255, 45, 45, 0.5);
+                transition: all 0.3s;
+            }
+            .drop-zone.filled {
+                border-color: rgba(255, 45, 45, 0);
+                background-color: rgba(255, 45, 45, 0.1);
+            }
+        }
+
+        @keyframes pulseSlow {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        @keyframes pulseFast {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes eyeScan {
+            to { stroke-dashoffset: 0; }
+        }
+        @keyframes collapse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1) rotate(2deg); }
+            100% { transform: scale(0.8) rotate(-5deg); opacity: 0.2; }
+        }
+        @keyframes rebuild {
+            0% { opacity: 0; transform: scale(0.5) translateY(50px); }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-dark text-light font-mono overflow-hidden min-h-screen">
+    <!-- Audio elements -->
+    <!-- 音频元素 - 使用本地文件避免跨域问题 -->
+    <audio id="bg-music" loop preload="auto">
+        <source src="audio/bgm.MP3" type="audio/mpeg">
+     </audio>
+    <audio id="click-sound" preload="auto">
+        <source src="audio/mixkit-select-click-1109.mp3" type="audio/mpeg">
+     </audio>
+    <audio id="success-sound" preload="auto">
+        <source src="audio/mixkit-unlocking-563.mp3" type="audio/mpeg">
+     </audio>
+    <audio id="fail-sound" preload="auto">
+        <source src="audio/mixkit-error-fail-notification-946.mp3" type="audio/mpeg">
+     </audio>
+    <!-- 添加welcome音频 -->
+    <audio id="welcome-sound" preload="auto">
+        <source src="audio/welcome.mp3" type="audio/mpeg">
+      </audio>
+    <!-- 提示：请将音频文件下载到项目的audio文件夹中 -->
+
+    <!-- 1. Laplace's Canvas (Initial Scene) -->
+    <div id="scene-1" class="fixed inset-0 z-50">
+        <video autoplay muted loop playsinline class="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0">
+            <source src="image/GLITCH  (7).mp4" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        <div id="laplace-canvas" class="absolute inset-0"></div>
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="text-center">
+                <h1 class="text-5xl font-bold text-accent glow opacity-0 fade-in" style="animation-delay: 1s">LAPLACE'S WEB</h1>
+                <p class="text-accent mt-4 opacity-0 fade-in" style="animation-delay: 0.1s">online number: <span id="online-count">32808</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Iris Scan (Camera Scene) -->
+    <div id="scene-2" class="hidden fixed inset-0 z-50 bg-dark flex items-center justify-center p-4">
+        <video autoplay muted loop playsinline class="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0">
+            <source src="image/GLITCH  (7).mp4" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        <div class="relative max-w-md w-full">
+            <div class="text-center mb-4 opacity-0 fade-in" style="animation-delay: 0.5s">
+                <p class="text-accent">EYE RECOGNITION REQUIRED</p>
+            </div>
+            <div class="aspect-video bg-black/50 rounded-md overflow-hidden border-2 border-accent/50 relative mx-auto opacity-0 fade-in" style="animation-delay: 0.8s">
+                <video id="camera-feed" class="w-full h-full object-cover"></video>
+                <!-- Eye shape overlay -->
+                <svg class="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="50%" cy="50%" rx="30%" ry="20%" fill="none" stroke="#ff2d2d" stroke-width="2" class="eye-scan" />
+                    <circle cx="50%" cy="50%" r="10%" fill="none" stroke="#ff2d2d" stroke-width="1" class="eye-scan" style="animation-delay: 0.5s" />
+                </svg>
+                <div id="scan-status" class="absolute bottom-4 left-0 right-0 text-center text-sm text-accent opacity-0">
+                    SCANNING...
+                </div>
+            </div>
+            <div id="scan-success" class="hidden absolute inset-0 bg-dark/80 flex items-center justify-center">
+                <p class="text-accent text-xl glow">IDENTITY CONFIRMED</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Turing Test Questions (Pop-ups) -->
+    <div id="scene-3" class="hidden fixed inset-0 z-50 bg-dark/90 flex items-center justify-center p-4">
+        <video autoplay muted loop playsinline class="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0">
+            <source src="image/GLITCH  (7).mp4" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        <div id="question-container" class="max-w-md w-full bg-black border-2 border-accent/50 rounded-md p-6 opacity-0 fade-in">
+            <h2 class="text-accent text-xl mb-4">INTERROGATION PROTOCOL</h2>
+            <p id="test-question" class="mb-6">Question loading...</p>
+            <div class="flex gap-4">
+                <button class="test-answer flex-1 py-2 border border-accent/50 hover:bg-accent/10 transition-colors" data-answer="yes">YES</button>
+                <button class="test-answer flex-1 py-2 border border-accent/50 hover:bg-accent/10 transition-colors" data-answer="no">NO</button>
+            </div>
+            <div id="interlinked-feedback" class="hidden mt-6 text-center text-accent">
+                <p>INTERLINKED.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Landing Page (Daily Q&A) -->
+    <div id="scene-4" class="hidden fixed inset-0 z-40 overflow-y-auto">
+        <!-- 修复视频背景 -->
+        <video autoplay muted loop playsinline class="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0">
+            <source src="image/GLITCH  (8).mp4" type="video/mp4">
+            <!-- 添加视频加载失败提示 -->
+            您的浏览器不支持视频标签。
+        </video>
+        <!-- 调整遮罩层透明度 -->
+        <div class="absolute inset-0 bg-dark/50 z-0"></div>
+        <div class="min-h-screen flex flex-col relative z-10">
+            <!-- Progress Bar -->
+            <div class="sticky top-4 z-10 px-4">
+                <div class="max-w-2xl mx-auto h-4 bg-black/50 rounded-full overflow-hidden border border-accent/30">
+                    <div id="qa-progress" class="h-full bg-accent w-0 transition-all duration-500"></div>
+                    <div class="absolute inset-0 flex items-center justify-center text-xs">
+                        <span id="qa-count">0/5 QUESTIONS</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col items-center justify-center p-4">
+                <div class="max-w-md w-full text-center">
+                    <h1 class="text-4xl mb-8 font-bold text-accent glow">THE OMNISCIENT COCOON</h1>
+                    <p class="mb-8 text-gray-300">ASK YOUR QUESTIONS. RECEIVE PROBABILITIES.</p>
+                    
+                    <div class="mb-6">
+                        <textarea 
+                            id="user-question" 
+                            placeholder="Type your question here..." 
+                            class="w-full p-4 border-2 border-accent/50 bg-black rounded-md h-32 focus:outline-none focus:ring-2 focus:ring-accent transition-all text-white resize-none"
+                        ></textarea>
+                    </div>
+                    
+                    <button 
+                        id="submit-qa" 
+                        class="bg-accent text-white px-6 py-3 rounded-md hover:bg-accent/80 transition-colors w-full"
+                    >
+                        SEEK ANSWER
+                    </button>
+                    
+                    <div id="qa-history" class="mt-8 space-y-6"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Collapse Scene (Chapter 2: Puzzle) -->
+    <div id="scene-5" class="fixed inset-0 z-50 hidden">
+        <video autoplay muted loop playsinline class="absolute top-0 left-0 w-full h-full object-cover opacity-50 z-0">
+            <source src="image/GLITCH  (29).mp4" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        <div class="absolute inset-0 p-4">
+            <h2 class="text-2xl text-accent mb-4 glow">RECONSTRUCT THE BABEL</h2>
+            <div id="countdown" class="absolute top-6 right-6 text-accent text-4xl font-bold glow opacity-0 fade-in" style="animation-delay: 0.5s">60</div>
+            <p class="text-gray-300 mb-6">DRAG FRAGMENTS TO THEIR POSITIONS</p>
+            
+            <!-- Babel Tower Base -->
+            <div class="relative w-full h-[70vh] mx-auto max-w-4xl border-2 border-accent/20 rounded-md overflow-hidden bg-black/30">
+                <!-- Tower structure (collapsing) -->
+                <div id="babel-tower" class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[30%] h-[60%] bg-black/50 border-l-2 border-r-2 border-accent/30 collapse">
+                    <div class="absolute top-0 left-0 right-0 h-1/4 border-b-2 border-accent/30"></div>
+                    <div class="absolute top-1/4 left-0 right-0 h-1/4 border-b-2 border-accent/30"></div>
+                </div>
+                
+                <!-- Disaster ship -->
+                <div class="absolute top-[10%] right-[15%] w-[15%] h-[10%] bg-black/70 rotate-12">
+                    <div class="absolute inset-0 border border-accent/40"></div>
+                    <div class="absolute top-1/2 left-0 right-0 h-1 bg-accent/40"></div>
+                </div>
+                
+                <!-- Drop zones for puzzle -->
+                <div class="drop-zone absolute bottom-[30%] left-[20%] w-[15%] h-[15%]" data-target="1"></div>
+                <div class="drop-zone absolute bottom-[40%] left-[40%] w-[10%] h-[10%]" data-target="2"></div>
+                <div class="drop-zone absolute bottom-[20%] right-[30%] w-[12%] h-[12%]" data-target="3"></div>
+                <div class="drop-zone absolute top-[30%] left-[30%] w-[8%] h-[8%]" data-target="4"></div>
+            </div>
+            
+            <!-- Puzzle fragments (draggable) -->
+            <div class="flex flex-wrap gap-4 mt-4 justify-center">
+                <div class="draggable w-20 h-20 bg-accent/10 border border-accent/40" data-fragment="1">
+                    <div class="w-full h-full flex items-center justify-center">
+                        <div class="w-1/2 h-1/2 bg-accent/30"></div>
+                    </div>
+                </div>
+                <div class="draggable w-16 h-16 bg-accent/10 border border-accent/40" data-fragment="2">
+                    <div class="w-full h-full flex items-center justify-center">
+                        <div class="w-3/4 h-1 bg-accent/50"></div>
+                    </div>
+                </div>
+                <div class="draggable w-18 h-18 bg-accent/10 border border-accent/40" data-fragment="3">
+                    <div class="w-full h-full flex items-center justify-center">
+                        <div class="w-1 bg-full h-3/4 bg-accent/50"></div>
+                    </div>
+                </div>
+                <div class="draggable w-12 h-12 bg-accent/10 border border-accent/40" data-fragment="4">
+                    <div class="w-full h-full flex items-center justify-center">
+                        <div class="w-3/4 h-3/4 border border-accent/50"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="puzzle-complete" class="hidden absolute inset-0 bg-dark/80 flex items-center justify-center">
+                <p class="text-accent text-2xl glow">STRUCTURE STABILIZED</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Final Chapter (Chapter 3: Connection) -->
+    <div id="scene-6" class="fixed inset-0 z-50 hidden">
+        <video class="absolute inset-0 w-full h-full object-cover opacity-30 z-0" autoplay loop muted playsinline>
+            <source src="image/GLITCH  (3).mp4" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        <div class="absolute inset-0 p-4">
+            <h2 class="text-2xl text-accent mb-4 glow">ESTABLISH CONNECTION</h2>
+            <p class="text-gray-300 mb-8">FIND CLUES. SELECT CORRECT SYMBOLS.</p>
+            
+            <!-- Hidden clues (appear on hover) -->
+            <div class="relative max-w-2xl mx-auto mb-12 h-40">
+                <div class="clue-hover absolute top-1/4 left-1/4 text-accent/70 text-sm">
+                    <p>∆ = ASCENSION</p>
+                </div>
+                <div class="clue-hover absolute top-1/2 right-1/3 text-accent/70 text-sm">
+                    <p>○ = UNITY</p>
+                </div>
+                <div class="clue-hover absolute bottom-1/4 left-1/3 text-accent/70 text-sm">
+                    <p>□ = FOUNDATION</p>
+                </div>
+            </div>
+            
+            <!-- Symbol buttons -->
+            <div class="flex justify-center gap-12 mb-12">
+                <div class="symbol-btn w-40 h-40 border-2 border-accent/50 flex items-center justify-center cursor-pointer hover:bg-accent/10 transition-colors" data-symbol="triangle">
+                    <div class="w-20 h-20" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); background-color: #ff2d2d;"></div>
+                </div>
+                <div class="symbol-btn w-40 h-40 border-2 border-accent/50 flex items-center justify-center cursor-pointer hover:bg-accent/10 transition-colors" data-symbol="circle">
+                    <div class="w-20 h-20 rounded-full border-2 border-accent"></div>
+                </div>
+                <div class="symbol-btn w-40 h-40 border-2 border-accent/50 flex items-center justify-center cursor-pointer hover:bg-accent/10 transition-colors" data-symbol="square">
+                    <div class="w-20 h-20 border-2 border-accent"></div>
+                </div>
+                <div class="symbol-btn w-40 h-40 border-2 border-accent/50 flex items-center justify-center cursor-pointer hover:bg-accent/10 transition-colors" data-symbol="cross">
+                    <div class="relative w-20 h-20">
+                        <div class="absolute top-1/2 left-0 right-0 h-2 bg-accent/50 transform -translate-y-1/2"></div>
+                        <div class="absolute top-0 bottom-0 left-1/2 w-2 bg-accent/50 transform -translate-x-1/2"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Selected symbols indicator -->
+            <div class="max-w-2xl mx-auto flex justify-center gap-6 mb-12">
+                <div id="selected-1" class="w-16 h-16 border-2 border-accent/30"></div>
+                <div id="selected-2" class="w-16 h-16 border-2 border-accent/30"></div>
+                <div id="selected-3" class="w-16 h-16 border-2 border-accent/30"></div>
+            </div>
+            
+            <div id="connection-feedback" class="hidden text-center text-accent text-xl"></div>
+            
+            <!-- Tower rebuild animation container -->
+            <div id="tower-rebuild-container" class="hidden relative w-full h-[50vh] max-w-2xl mx-auto mt-8">
+                <div id="rebuilding-tower" class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[20%] bg-black/50 border border-accent/30 rebuild">
+                    <!-- Tower segments added dynamically -->
+                </div>
+            </div>
+            
+            <div class="text-center mt-12">
+                <button id="restart-cycle" class="hidden bg-accent/20 border border-accent/50 px-6 py-3 rounded-md hover:bg-accent/30 transition-colors">
+                    BEGIN NEW CYCLE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            currentScene: 1,
+            questionCount: 0,
+            testQuestionIndex: 0,
+            selectedSymbols: [],
+            correctSymbols: ['triangle', 'circle', 'square'],
+            puzzlePiecesPlaced: 0
+        };
+
+        // DOM Elements
+        const scenes = {
+            1: document.getElementById('scene-1'),
+            2: document.getElementById('scene-2'),
+            3: document.getElementById('scene-3'),
+            4: document.getElementById('scene-4'),
+            5: document.getElementById('scene-5'),
+            6: document.getElementById('scene-6')
+        };
+
+        // Audio Elements
+        const audio = {
+            bg: document.getElementById('bg-music'),
+            click: document.getElementById('click-sound'),
+            success: document.getElementById('success-sound'),
+            fail: document.getElementById('fail-sound'),
+            welcome: document.getElementById('welcome-sound') // 添加welcome音频引用
+        };
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            initLaplaceCanvas();
+            setupEventListeners();
+            // 延迟音频播放，确保用户有时间交互
+            setTimeout(() => {
+                playAudio(audio.bg, 0.1);
+                // 添加welcome音频自动播放
+                playAudio(audio.welcome, 0.1);
+            }, 1000);
+        });
+
+        // 1. Initialize Laplace's Canvas (Scene 1)
+        function initLaplaceCanvas() {
+            const canvas = document.getElementById('laplace-canvas');
+            const width = canvas.offsetWidth;
+            const height = canvas.offsetHeight;
+            
+            // Create 100 random points
+            const points = Array.from({ length: 100 }, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                radius: Math.random() * 2 + 1,
+                pulseSpeed: Math.random() * 3 + 1,
+                pulsePhase: Math.random() * Math.PI * 2
+            }));
+            
+            // Create connections between nearby points
+            const connections = [];
+            for (let i = 0; i < points.length; i++) {
+                for (let j = i + 1; j < points.length; j++) {
+                    const dx = points[i].x - points[j].x;
+                    const dy = points[i].y - points[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 100) {
+                        connections.push({ a: i, b: j, opacity: 0.1 + Math.random() * 0.2 });
+                    }
+                }
+            }
+            
+            // Animation loop
+            function animate(timestamp) {
+                if (state.currentScene !== 1) return;
+                
+                // Clear canvas
+                canvas.innerHTML = '';
+                
+                // Update points and draw
+                points.forEach((p, index) => {
+                    // Pulse animation
+                    p.pulsePhase += 0.01 * p.pulseSpeed;
+                    const pulse = 0.5 + Math.sin(p.pulsePhase) * 0.5;
+                    
+                    // Draw point
+                    const point = document.createElement('div');
+                    point.style.position = 'absolute';
+                    point.style.left = `${p.x}px`;
+                    point.style.top = `${p.y}px`;
+                    point.style.width = `${p.radius * pulse}px`;
+                    point.style.height = `${p.radius * pulse}px`;
+                    point.style.backgroundColor = 'rgba(255, 45, 45, ' + (0.3 + pulse * 0.5) + ')';
+                    point.style.borderRadius = '50%';
+                    canvas.appendChild(point);
+                });
+                
+                // Draw connections
+                connections.forEach(conn => {
+                    const a = points[conn.a];
+                    const b = points[conn.b];
+                    const line = document.createElement('div');
+                    line.style.position = 'absolute';
+                    line.style.left = `${a.x}px`;
+                    line.style.top = `${a.y}px`;
+                    line.style.width = `${Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2))}px`;
+                    line.style.height = '1px';
+                    line.style.backgroundColor = 'rgba(255, 45, 45, ' + conn.opacity + ')';
+                    line.style.transformOrigin = '0 0';
+                    line.style.transform = `rotate(${Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI}deg)`;
+                    canvas.appendChild(line);
+                });
+                
+                requestAnimationFrame(animate);
+            }
+            
+            requestAnimationFrame(animate);
+            
+            // 添加在线人数实时变化
+            const onlineCountEl = document.getElementById('online-count');
+            let currentCount = 32808;
+            
+            function updateOnlineCount() {
+            // 随机变化范围：-10 到 +10
+            const change = Math.floor(Math.random() * 21) - 100;
+            currentCount = Math.max(0, currentCount + change);
+            onlineCountEl.textContent = currentCount.toLocaleString();
+            }
+            
+            // 初始更新
+            updateOnlineCount();
+            // 每2秒更新一次
+            setInterval(updateOnlineCount, 2000);
+
+            // 创建点击提示文字
+            const clickPrompt = document.createElement('div');
+            clickPrompt.style.position = 'absolute';
+            clickPrompt.style.bottom = '50px';
+            clickPrompt.style.left = '50%';
+            clickPrompt.style.transform = 'translateX(-50%)';
+            clickPrompt.style.color = 'rgba(255, 45, 45, 0.8)';
+            clickPrompt.style.fontSize = '14px';
+            clickPrompt.style.textAlign = 'center';
+            clickPrompt.style.width = '100%';
+            clickPrompt.textContent = 'CLICK TO CONTINUE TO IDENTITY VERIFICATION';
+            canvas.appendChild(clickPrompt);
+            
+            // 添加点击事件
+            canvas.addEventListener('click', () => {
+                console.log('User clicked to transition to scene 2');
+                goToScene(2);
+                initCamera();
+            }, { once: true });
+        }
+
+        // 2. Initialize Camera (Scene 2)
+        function initCamera() {
+            const video = document.getElementById('camera-feed');
+            const scanStatus = document.getElementById('scan-status');
+            const scanSuccess = document.getElementById('scan-success');
+            
+            // Request camera access
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.play();
+                        
+                        // Start scan animation after 1 second
+                        setTimeout(() => {
+                            scanStatus.style.opacity = 1;
+                            
+                            // Complete scan after 3 seconds
+                            setTimeout(() => {
+                                scanStatus.style.opacity = 0;
+                                scanSuccess.classList.remove('hidden');
+                                playAudio(audio.success, 0.3);
+                                
+                                // Move to scene 3 after 2 seconds
+                        setTimeout(() => {
+                            console.log('Transitioning to scene 3');
+                            goToScene(3);
+                            showTestQuestion();
+                        }, 2000);
+                            }, 3000);
+                        }, 1000);
+                    })
+                    .catch(err => {
+                        console.error('Camera access failed:', err);
+                        // Fallback if camera not available
+                        scanStatus.textContent = 'CAMERA UNAVAILABLE - PROCEEDING';
+                        scanStatus.style.opacity = 1;
+                        setTimeout(() => {
+                            scanSuccess.classList.remove('hidden');
+                            setTimeout(() => {
+                            console.log('Camera unavailable - transitioning to scene 3');
+                            goToScene(3);
+                            showTestQuestion();
+                        }, 2000);
+                        }, 2000);
+                    });
+            }
+        }
+
+        // 3. Turing Test Questions (Scene 3)
+        function showTestQuestion() {
+            const questions = [
+                "Do you dream of electric sheep?",
+                "Can a machine feel regret?",
+                "Is 'happiness' just a chemical illusion?"
+            ];
+            
+            const container = document.getElementById('question-container');
+            const questionEl = document.getElementById('test-question');
+            const feedbackEl = document.getElementById('interlinked-feedback');
+            
+            // Reset
+            feedbackEl.classList.add('hidden');
+            container.style.animation = 'none';
+            container.offsetHeight; // Trigger reflow
+            container.style.animation = 'fadeIn 0.5s forwards';
+            
+            // Show current question
+            questionEl.textContent = questions[state.testQuestionIndex];
+            
+            // Handle answers
+            document.querySelectorAll('.test-answer').forEach(btn => {
+                btn.onclick = () => {
+                    playAudio(audio.click, 0.3);
+                    // Show feedback
+                    feedbackEl.classList.remove('hidden');
+                    
+                    // Move to next question or scene
+                    if (state.testQuestionIndex < questions.length - 1) {
+                        state.testQuestionIndex++;
+                        setTimeout(showTestQuestion, 1500);
+                    } else {
+                        setTimeout(() => {
+                            goToScene(4);
+                        }, 1500);
+                    }
+                };
+            });
+        }
+
+        // 4. Q&A Landing Page (Scene 4)
+        function setupQA() {
+            const input = document.getElementById('user-question');
+            const submitBtn = document.getElementById('submit-qa');
+            const historyEl = document.getElementById('qa-history');
+            const progressEl = document.getElementById('qa-progress');
+            const countEl = document.getElementById('qa-count');
+            
+            // Preset probabilistic answers
+            const answerTemplates = [
+                "Probability calculation: {{prob}}% chance of {{event}}.",
+                "Laplace's prediction: {{prob}}% likelihood of {{event}} occurring.",
+                "Data analysis indicates {{prob}}% probability of {{event}}.",
+                "Statistical projection: {{prob}}% chance that {{event}}.",
+                "Deterministic outcome: {{prob}}% certainty in {{event}}."
+            ];
+            
+            const events = [
+                "favorable outcomes",
+                "significant change",
+                "revelation",
+                "continuity",
+                "unexpected divergence"
+            ];
+            
+            // Generate random probability answer
+            function generateAnswer() {
+                const prob = Math.floor(Math.random() * 40) + 60; // 60-99%
+                const template = answerTemplates[Math.floor(Math.random() * answerTemplates.length)];
+                const event = events[Math.floor(Math.random() * events.length)];
+                return template.replace('{{prob}}', prob).replace('{{event}}', event);
+            }
+            
+            // Handle question submission
+            submitBtn.addEventListener('click', () => {
+                const question = input.value.trim();
+                if (!question) return;
+                
+                playAudio(audio.click, 0.3);
+                
+                // Increment count
+                state.questionCount++;
+                const progress = (state.questionCount / 5) * 100;
+                progressEl.style.width = `${progress}%`;
+                countEl.textContent = `${state.questionCount}/5 QUESTIONS`;
+                
+                // Generate and display answer
+                const answer = generateAnswer();
+                const qaEl = document.createElement('div');
+                qaEl.className = 'p-4 border border-accent/20 rounded-md bg-black/30 slide-up';
+                qaEl.innerHTML = `
+                    <p class="text-accent font-bold mb-2">Q: ${question}</p>
+                    <p class="text-gray-300">A: ${answer}</p>
+                `;
+                historyEl.prepend(qaEl);
+                
+                // Clear input
+                input.value = '';
+                
+                // Check if max questions reached
+                if (state.questionCount >= 5) {
+                    playAudio(audio.fail, 0.3);
+                    setTimeout(() => {
+                        goToScene(5);
+                    }, 2000);
+                } else {
+                    playAudio(audio.success, 0.2);
+                }
+            });
+            
+            // Allow enter key submission
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitBtn.click();
+                }
+            });
+        }
+
+        // 5. Puzzle Scene (Scene 5)
+        function setupPuzzle() {
+            const draggables = document.querySelectorAll('.draggable');
+            const dropZones = document.querySelectorAll('.drop-zone');
+            const puzzleComplete = document.getElementById('puzzle-complete');
+            const countdownEl = document.getElementById('countdown');
+            let countdownInterval;
+            let timeRemaining = 60;
+        
+            // 开始倒计时
+            function startCountdown() {
+                countdownEl.textContent = timeRemaining;
+                countdownInterval = setInterval(() => {
+                    timeRemaining--;
+                    countdownEl.textContent = timeRemaining;
+        
+                    if (timeRemaining <= 0) {
+                        clearInterval(countdownInterval);
+                        playAudio(audio.fail, 0.3);
+                        alert('TIME EXPIRED - PUZZLE FAILED');
+                        goToScene(6); // 超时后跳转场景
+                    }
+                }, 1000);
+            }
+        
+            // 初始化倒计时
+            startCountdown();
+        
+            // Make fragments draggable
+            draggables.forEach(el => {
+                el.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('fragment', el.getAttribute('data-fragment'));
+                    setTimeout(() => el.classList.add('opacity-50'), 0);
+                });
+                
+                el.addEventListener('dragend', () => {
+                    el.classList.remove('opacity-50');
+                });
+                
+                // Enable drag
+                el.setAttribute('draggable', true);
+            });
+            
+            // Setup drop zones
+            dropZones.forEach(zone => {
+                zone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    zone.classList.add('bg-accent/10');
+                });
+                
+                zone.addEventListener('dragleave', () => {
+                    zone.classList.remove('bg-accent/10');
+                });
+                
+                zone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('bg-accent/10');
+                    
+                    const fragmentId = e.dataTransfer.getData('fragment');
+                    const targetId = zone.getAttribute('data-target');
+                    
+                    // Check if fragment matches target
+                    if (fragmentId === targetId) {
+                        zone.classList.add('filled');
+                        state.puzzlePiecesPlaced++;
+                        playAudio(audio.success, 0.2);
+                        
+                        // Hide the draggable fragment
+                        document.querySelector(`[data-fragment="${fragmentId}"]`).classList.add('hidden');
+                        
+                        // Check if all pieces placed
+                        if (state.puzzlePiecesPlaced === dropZones.length) {
+                            setTimeout(() => {
+                                puzzleComplete.classList.remove('hidden');
+                                playAudio(audio.success, 0.3);
+        
+                                setTimeout(() => {
+                                    goToScene(6);
+                                }, 2000);
+                            }, 1000);
+                        }
+                    } else {
+                        playAudio(audio.fail, 0.2);
+                    }
+                });
+            });
+        }
+
+        // 6. Final Chapter (Scene 6)
+        function setupConnectionScene() {
+            const symbols = document.querySelectorAll('.symbol-btn');
+            const selectedEls = [
+                document.getElementById('selected-1'),
+                document.getElementById('selected-2'),
+                document.getElementById('selected-3')
+            ];
+            const feedbackEl = document.getElementById('connection-feedback');
+            const towerContainer = document.getElementById('tower-rebuild-container');
+            const restartBtn = document.getElementById('restart-cycle');
+            
+            // Handle symbol selection
+            symbols.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (state.selectedSymbols.length < 3) {
+                        const symbol = btn.getAttribute('data-symbol');
+                        state.selectedSymbols.push(symbol);
+                        playAudio(audio.click, 0.2);
+                        
+                        // Update selected indicators
+                        selectedEls[state.selectedSymbols.length - 1].innerHTML = btn.innerHTML;
+                        
+                        // Check if 3 symbols selected
+                        if (state.selectedSymbols.length === 3) {
+                            checkSymbolCombination();
+                        }
+                    }
+                });
+            });
+            
+            // Check if symbols are correct
+            function checkSymbolCombination() {
+                const isCorrect = state.selectedSymbols.every((sym, i) => sym === state.correctSymbols[i]);
+                
+                if (isCorrect) {
+                    feedbackEl.textContent = 'CONNECTION ESTABLISHED';
+                    feedbackEl.classList.remove('hidden');
+                    playAudio(audio.success, 0.3);
+                    
+                    // Show tower rebuild animation
+                    setTimeout(() => {
+                        towerContainer.classList.remove('hidden');
+                        buildTower();
+                        
+                        // 塔重建动画完成后自动跳转
+                        setTimeout(() => {
+                            // 可以在这里添加一个过渡场景或直接跳转到新场景
+                            console.log('Auto navigating to next scene');
+                            // 重置状态
+                            state.currentScene = 1;
+                            state.questionCount = 0;
+                            state.testQuestionIndex = 0;
+                            state.selectedSymbols = [];
+                            state.puzzlePiecesPlaced = 0;
+
+                            // 重置UI
+                            selectedEls.forEach(el => el.innerHTML = '');
+                            feedbackEl.classList.add('hidden');
+                            towerContainer.classList.add('hidden');
+                            restartBtn.classList.add('hidden');
+                            document.querySelectorAll('.draggable').forEach(el => el.classList.remove('hidden'));
+                            document.querySelectorAll('.drop-zone').forEach(el => el.classList.remove('filled'));
+                            document.getElementById('qa-history').innerHTML = '';
+                            document.getElementById('qa-progress').style.width = '0%';
+                            document.getElementById('qa-count').textContent = '0/5 QUESTIONS';
+
+                            // 自动跳转到场景1重新开始
+                            Object.values(scenes).forEach(scene => scene.classList.add('hidden'));
+                            scenes[1].classList.remove('hidden');
+                            initLaplaceCanvas();
+                        }, 6000);
+                    }, 1000);
+                } else {
+                    feedbackEl.textContent = 'CONNECTION FAILED';
+                    feedbackEl.classList.remove('hidden');
+                    playAudio(audio.fail, 0.3);
+                    
+                    // Reset after 2 seconds
+                    setTimeout(() => {
+                        state.selectedSymbols = [];
+                        selectedEls.forEach(el => el.innerHTML = '');
+                        feedbackEl.classList.add('hidden');
+                    }, 2000);
+                }
+            }
+            
+            // Animate tower rebuilding
+            function buildTower() {
+                const tower = document.getElementById('rebuilding-tower');
+                let height = 50; // Initial height
+                
+                // Add segments every 300ms
+                const interval = setInterval(() => {
+                    height += 30;
+                    tower.style.height = `${height}px`;
+                    
+                    // Stop after reaching top
+                    if (height > towerContainer.offsetHeight - 50) {
+                        clearInterval(interval);
+                    }
+                }, 300);
+            }
+            
+            // Restart cycle
+            restartBtn.addEventListener('click', () => {
+                playAudio(audio.click, 0.3);
+                // Reset state
+                state.currentScene = 1;
+                state.questionCount = 0;
+                state.testQuestionIndex = 0;
+                state.selectedSymbols = [];
+                state.puzzlePiecesPlaced = 0;
+                
+                // Reset UI
+                selectedEls.forEach(el => el.innerHTML = '');
+                feedbackEl.classList.add('hidden');
+                towerContainer.classList.add('hidden');
+                restartBtn.classList.add('hidden');
+                document.querySelectorAll('.draggable').forEach(el => el.classList.remove('hidden'));
+                document.querySelectorAll('.drop-zone').forEach(el => el.classList.remove('filled'));
+                document.getElementById('qa-history').innerHTML = '';
+                document.getElementById('qa-progress').style.width = '0%';
+                document.getElementById('qa-count').textContent = '0/5 QUESTIONS';
+                
+                // Go to scene 1
+                Object.values(scenes).forEach(scene => scene.classList.add('hidden'));
+                scenes[1].classList.remove('hidden');
+                initLaplaceCanvas();
+            });
+        }
+
+        // Helper: Transition between scenes
+        function goToScene(sceneNumber) {
+            // Hide current scene
+            scenes[state.currentScene].classList.add('hidden');
+            
+            // Update state
+            state.currentScene = sceneNumber;
+            
+            // Show new scene
+            scenes[sceneNumber].classList.remove('hidden');
+            
+            // Initialize scene-specific logic
+            switch(sceneNumber) {
+                case 4:
+                    setupQA();
+                    break;
+                case 5:
+                    setupPuzzle();
+                    break;
+                case 6:
+                    setupConnectionScene();
+                    break;
+            }
+        }
+
+        // Helper: Play audio with volume
+        function playAudio(element, volume = 0.5) {
+            if (element) {
+                element.volume = volume;
+                element.currentTime = 0;
+                element.play().catch(err => console.log('Audio play failed:', err));
+            }
+        }
+
+        // Setup all event listeners
+        function setupEventListeners() {
+            // Global click to enable audio (browser autoplay restrictions)
+            document.addEventListener('click', () => {
+                playAudio(audio.bg, 0.1);
+                // 添加welcome音频自动播放
+                playAudio(document.getElementById('welcome-sound'), 0.5);
+            }, { once: true });
+        }
+    </script>
+</body>
+</html>
